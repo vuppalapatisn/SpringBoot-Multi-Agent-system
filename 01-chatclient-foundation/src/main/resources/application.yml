@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: chatclient-foundation
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      # Phase 8: every model call is bounded. No unbounded waits anywhere.
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 1024
+          temperature: 0.0
+
+    chat:
+      client:
+        observations:
+          # Debug only. These put prompt and completion content in the logs, which for this
+          # service means customer free text. Never true in an environment with real data.
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  foundation:
+    classifier-model: claude-sonnet-5
+    max-tokens: 1024
+    request-timeout: 30s
+    memory-window: 20
+    max-input-chars: 8000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+
+logging:
+  pattern:
+    # runId on every line - Phase 9
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{runId:-}] %logger{36} - %msg%n"
+  level:
+    io.github.vuppalapatisn.agentic: INFO
+    org.springframework.ai.chat.client.advisor: INFO

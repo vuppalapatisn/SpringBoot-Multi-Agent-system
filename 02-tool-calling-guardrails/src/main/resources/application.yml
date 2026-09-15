@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: tool-calling-guardrails
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 1024
+          temperature: 0.0
+
+    tools:
+      # A tool error becomes a message the model can recover from, rather than an exception that
+      # aborts the run. The guard has already refused the effect by this point.
+      throw-exception-on-error: false
+      observations:
+        # Tool arguments and results can contain PII. Off in any environment with real data.
+        include-content: false
+      limits:
+        # Framework-level ceilings on the model loop. These are the belt; GuardedToolExecutor and
+        # the approval gate are the braces. Both layers, always.
+        max-total-tool-calls: 10
+        max-calls-per-tool-default: 3
+        max-calls-per-tool:
+          issueRefund: 1
+          notifyCustomer: 1
+          cancelRefund: 1
+        on-limit-exceeded: RETURN_ERROR_RESPONSE
+        excluded-tools:
+          - lookupOrder
+
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  tools:
+    # ---- THE KILL SWITCH -------------------------------------------------
+    # EXECUTE | DRY_RUN | DISABLED. Changeable without a deploy; DRY_RUN performs no writes.
+    execution-mode: EXECUTE
+
+    # Every tool marked irreversible in code must appear here or the application will not start.
+    approval-required-tools:
+      - issueRefund
+      - notifyCustomer
+
+    # Tier 1: below this, and low risk, and inside the window -> no human is interrupted.
+    auto-approve-below-minor: 10000      # $100.00
+    # Tier 3: above this, or high risk -> two distinct approvers.
+    dual-control-above-minor: 100000     # $1,000.00
+    max-refund-age-days: 30
+
+    # Expiry means NO. It never auto-approves.
+    approval-ttl: PT24H
+
+    max-irreversible-per-run: 2
+
+    notification-allowlist:
+      - "@customers.example"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO
