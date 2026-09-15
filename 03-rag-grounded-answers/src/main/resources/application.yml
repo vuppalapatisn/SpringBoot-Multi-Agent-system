@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: rag-grounded-answers
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 700
+          temperature: 0.0
+
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  rag:
+    corpus-location: classpath*:/policies/*.md
+    # Offline hashing embeddings. Replace with a real model for anything beyond a demo:
+    # add spring-ai-starter-model-transformers (local ONNX) and delete the embeddingModel bean.
+    # Changing the embedding model invalidates the index — treat it as a migration.
+    embedding-dimensions: 512
+    top-k: 4
+    # Below this, a clause is not relevant enough to cite. An empty result is a refusal, which is
+    # the correct answer for a question the policy does not cover.
+    similarity-threshold: 0.25
+    max-question-chars: 2000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO

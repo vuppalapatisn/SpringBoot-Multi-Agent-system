@@ -1,0 +1,60 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: mcp-server-tools
+
+  ai:
+    mcp:
+      server:
+        enabled: true
+        name: refund-desk
+        version: 1.0.0
+        # SYNC is the right default for a service whose tools are ordinary blocking calls.
+        type: SYNC
+        # STREAMABLE is the current MCP HTTP transport; SSE is the older one, STATELESS suits
+        # horizontally-scaled deployments with no per-session state.
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+        request-timeout: 20s
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+        # Clients cache the tool list. Notify on change so a client can re-read it rather than
+        # calling a tool whose schema has moved underneath it.
+        tool-change-notification: true
+        annotation-scanner:
+          enabled: true
+        # Published to clients on connect. Factual, and free of instructions: this text lands in
+        # someone else's model context, and a client that treats it as untrusted is being sensible.
+        instructions: >
+          Refund desk tools for a single retailer. Refund amounts are taken from the order record
+          and cannot be specified by the caller. Irreversible refunds above the automatic tier
+          return APPROVAL_REQUIRED and are decided by a human out of band; this server does not
+          accept approvals through MCP.
+
+agentic:
+  mcp-server:
+    # Server-side kill switch. Reads keep working when execution is off.
+    execution-enabled: true
+    auto-approve-below-minor: 10000      # $100.00
+    dual-control-above-minor: 100000     # $1,000.00
+    max-refund-age-days: 30
+    max-refund-attempts-per-order: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO
