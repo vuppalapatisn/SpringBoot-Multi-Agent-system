@@ -44,7 +44,7 @@ Write these *on the diagram*, not in a separate doc:
 
 * on every `{TOOL}`: its class, e.g. `{issueRefund} E2`
 * on every cycle: its bound, e.g. `↺ max 6 steps / 60s / $0.40`
-* on every `<GATE>`: its rule, e.g. `<amount ≤ $100 auto>` or `<approver: refund-lead>`
+* on every `<GATE>`: its rule, e.g. `<amount < $100 → auto>` or `<approver: refund-lead>`
 * on every irreversible tool: `⚠` and its compensation window, or `⚠ NONE`
 
 ### The agency budget
@@ -126,7 +126,7 @@ flowchart TD
     T2 --> T3["{checkFraud} R1 (tainted)"]
     T3 --> V2{{"validator:<br/>fraud result → enum only"}}
     V2 --> LLM(("(LLM) classify<br/>→ RefundDecision"))
-    LLM --> G1["&lt;GATE&gt; policy<br/>amount ≤ $100 &amp; risk=LOW<br/>&amp; within 30d"]
+    LLM --> G1["&lt;GATE&gt; policy<br/>amount &lt; $100 &amp; risk=LOW<br/>&amp; within 30d"]
 
     G1 -- "auto" --> S1["[[STATE]] intent recorded<br/>idem key = run:order:amount"]
     G1 -- "needs human" --> S2["[[STATE]] AWAITING_APPROVAL<br/>payload hash frozen"]
@@ -161,7 +161,7 @@ to classifier wherever a rule exists.*
 | Detection latency | minutes (ledger reconciliation) | immediate |
 | Compensation | `cancelRefund` before settlement | **NONE** |
 | Window | ~30 min | — |
-| Approval | auto ≤ $100 & risk LOW; else `refund-lead`; ≥ $2,000 dual control | inherits the refund decision |
+| Approval | auto < $100 & risk LOW & ≤30 d; else `refund-lead`; ≥ $1,000 or risk HIGH → dual control | inherits the refund decision |
 | Idempotency key | `sha256(runId + orderId + amountMinor)` | `sha256(runId + "notify" + orderId)` |
 | Dry-run | yes | yes |
 | Rate limit | 1 per order per run; 3 per customer per day | 1 per run |

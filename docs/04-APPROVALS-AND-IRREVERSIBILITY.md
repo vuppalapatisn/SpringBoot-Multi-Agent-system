@@ -56,14 +56,25 @@ Pick the weakest sufficient gate, placed **before** the one-way door.
 Most production systems need a **tiered** policy, which is what this repo implements:
 
 ```
-amount ≤ $100  AND risk = LOW  AND age ≤ 30d   ──▶ auto-approve (policy gate)
-amount ≤ $2,000                                 ──▶ single approver: refund-lead
-amount  > $2,000  OR risk = HIGH                ──▶ dual control: refund-lead + finance
-any mismatch between model proposal and order    ──▶ decline, do not escalate
+amount < $100  AND risk = LOW  AND age ≤ 30d   ──▶ auto-approve (policy gate)
+amount < $1,000                                 ──▶ single approver: refund-lead
+amount ≥ $1,000  OR risk = HIGH                 ──▶ dual control: refund-lead + finance
+model's proposed amount ≠ the order total        ──▶ order total applies, and escalate
 ```
 
-Note the last line. A model proposing an amount that does not match the order is not an approval
-question, it is a bug or an attack. Escalating it trains approvers to rubber-stamp.
+The last line is the one worth arguing about, and the repo implements it deliberately. A model
+proposing an amount that does not match the order is a bug or an attack, so **the model's number is
+discarded** — the order total is what any later step uses, and the mismatch is recorded as an
+integrity signal with risk forced to `HIGH`.
+
+It then **escalates rather than declining**, because declining would punish a customer for a model
+formatting error; a human looks at it instead. What the system must never do is treat the model's
+number as a negotiating position. See `reconcile()` in
+[`06-workflow-orchestration`](../06-workflow-orchestration/src/main/java/io/github/vuppalapatisn/agentic/workflow/steps/CaseClassifier.java)
+and the `amountMismatchEscalates` test in projects 06 and 07.
+
+A denial, by contrast, is reserved for cases a rule actually forbids (an undelivered order, a
+clause that says no). Escalating those would train approvers to rubber-stamp.
 
 ---
 
