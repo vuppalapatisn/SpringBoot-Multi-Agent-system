@@ -1,0 +1,46 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: workflow-orchestration
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 700
+          temperature: 0.0
+
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  workflow:
+    # Kill switch. DRY_RUN equivalent: no money moves, no message is sent.
+    dry-run: false
+    auto-approve-below-minor: 10000      # $100.00
+    dual-control-above-minor: 100000     # $1,000.00
+    max-refund-age-days: 30
+    notification-allowlist:
+      - "@customers.example"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO

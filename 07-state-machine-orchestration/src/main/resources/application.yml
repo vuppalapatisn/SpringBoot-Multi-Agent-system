@@ -1,0 +1,71 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: state-machine-orchestration
+
+  # A file-backed H2 database, so "durable" means durable: stop the app, start it again, and a
+  # run still sitting in AWAITING_APPROVAL is still there. Swap in PostgreSQL by changing this
+  # block and nothing else.
+  datasource:
+    url: jdbc:h2:file:./data/refund-runs;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 700
+          temperature: 0.0
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  state-machine:
+    dry-run: false
+    auto-approve-below-minor: 10000      # $100.00
+    dual-control-above-minor: 100000     # $1,000.00
+    max-refund-age-days: 30
+
+    # Expiry means NO. There is no auto-approve-on-timeout path anywhere in this project.
+    approval-ttl: PT24H
+
+    # The compensation window, as a number rather than a comment: a refund can be cancelled until
+    # it settles, and after that the effect is irreversible in fact.
+    settlement-delay: PT30M
+
+    # How long a run may sit in PAYOUT_PENDING before the reconciliation sweeper asks the provider
+    # whether the idempotency key was applied.
+    reconcile-after: PT2M
+
+    sweep-interval: PT1M
+
+    notification-allowlist:
+      - "@customers.example"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO
