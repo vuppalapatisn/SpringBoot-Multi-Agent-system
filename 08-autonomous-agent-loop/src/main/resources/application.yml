@@ -1,0 +1,81 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: autonomous-agent-loop
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 1024
+          temperature: 0.0
+
+    tools:
+      throw-exception-on-error: false
+      observations:
+        include-content: false
+      limits:
+        # The framework's belt. RunBudget is the braces, and GuardedPayout is the last line.
+        # All three, always: they protect different things (see docs/03-TOOL-BOUNDARIES.md §6).
+        max-total-tool-calls: 12
+        max-calls-per-tool-default: 3
+        max-calls-per-tool:
+          issueRefund: 1
+          notifyCustomer: 1
+        on-limit-exceeded: RETURN_ERROR_RESPONSE
+
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  agent:
+    # ---- THE BUDGETS ----------------------------------------------------
+    # An agent architecture's worst case is whatever you capped it at. These are the caps.
+    max-steps: 8                   # model turns
+    max-tool-calls: 12
+    max-calls-per-tool-default: 3
+    max-calls-per-tool:
+      issueRefund: 1               # one-way door: once
+      notifyCustomer: 1
+    max-tokens: 40000
+    max-cost-minor: 50             # $0.50 per run
+    max-wall-clock: PT90S
+    max-no-progress-steps: 2       # the same tool with the same arguments twice ends the run
+
+    # Rough pricing inputs for the cost estimate, in minor units per million tokens.
+    prompt-cost-per-million-minor: 300
+    completion-cost-per-million-minor: 1500
+
+    # One pass. Unbounded self-critique is a cost leak dressed as quality.
+    reflection-enabled: false
+
+    # Kill switch.
+    dry-run: false
+
+    auto-approve-below-minor: 10000      # $100.00
+    dual-control-above-minor: 100000     # $1,000.00
+    max-refund-age-days: 30
+    notification-allowlist:
+      - "@customers.example"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO

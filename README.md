@@ -34,19 +34,21 @@ ceilings, and the choice of architecture.
 
 ## Projects
 
-| # | Project | What it teaches | Irreversible actions | Architecture |
-|---|---------|-----------------|----------------------|--------------|
-| 01 | [chatclient-foundation](01-chatclient-foundation/) | `ChatClient`, prompts, structured output, memory, advisors, observability, resilience | none (read-only) | Linear call |
-| 02 | [tool-calling-guardrails](02-tool-calling-guardrails/) | `@Tool`, tool boundary classes, approval gate, idempotency, dry-run, audit log | `issueRefund`, `notifyCustomer` | Gated tool loop |
-| 03 | [rag-grounded-answers](03-rag-grounded-answers/) | ETL, vector store, `RetrievalAugmentationAdvisor`, citation + groundedness gates | none (read-only) | Retrieve → augment → generate |
-| 04 | [mcp-server-tools](04-mcp-server-tools/) | MCP server, `@McpTool`, tool annotations as a trust contract, server-side policy | `issueRefund` (approval-required) | Tool provider |
-| 05 | [mcp-client-agent](05-mcp-client-agent/) | MCP client, per-server trust boundary, allowlist, tool-poisoning defence | delegated over MCP | Client + gate |
-| 06 | [workflow-orchestration](06-workflow-orchestration/) | Deterministic DAG: chain, parallel, route, evaluator-optimiser | `issueRefund` behind a static gate | **Workflow** |
-| 07 | [state-machine-orchestration](07-state-machine-orchestration/) | Persisted FSM, durable suspend/resume for human approval, saga compensation | `issueRefund` behind a durable gate | **State machine** |
-| 08 | [autonomous-agent-loop](08-autonomous-agent-loop/) | Model-driven loop, budgets, termination, reflection, fail-closed exhaustion | `issueRefund` behind a runtime gate | **Agent** |
-| 09 | [multi-agent-supervisor](09-multi-agent-supervisor/) | Supervisor + specialists, handoff contracts, blackboard, escalation | `issueRefund` behind supervisor + human gate | **Multi-agent** |
+| # | Project | What it teaches | Irreversible actions | Architecture | Tests |
+|---|---------|-----------------|----------------------|--------------|-------|
+| 01 | [chatclient-foundation](01-chatclient-foundation/) | `ChatClient`, prompts, structured output, memory, advisors, observability | none (read-only) | Linear call | 10 |
+| 02 | [tool-calling-guardrails](02-tool-calling-guardrails/) | tool boundary classes in code, tiered gate, frozen approvals, idempotency, dry-run, audit | `issueRefund`, `notifyCustomer` | Gated tool loop | 38 |
+| 03 | [rag-grounded-answers](03-rag-grounded-answers/) | ingestion, vector store, `RetrievalAugmentationAdvisor`, groundedness gate, tenant isolation | none (read-only) | Retrieve → augment → **verify** | 19 |
+| 04 | [mcp-server-tools](04-mcp-server-tools/) | MCP server, `@McpTool`, hints as a contract, server-side policy, separation of duty | `issueRefund` (approval-required) | Tool provider | 17 |
+| 05 | [mcp-client-agent](05-mcp-client-agent/) | per-server trust, pinned definitions, rug-pull alarm, tool-poisoning scan | delegated over MCP | Client + gate | 15 |
+| 06 | [workflow-orchestration](06-workflow-orchestration/) | deterministic DAG: chain, parallel, route, evaluator–optimiser | `issueRefund` behind a static gate | **Workflow** | 17 |
+| 07 | [state-machine-orchestration](07-state-machine-orchestration/) | persisted FSM, durable approvals with expiry, reconciliation, saga compensation | `issueRefund` behind a durable gate | **State machine** | 18 |
+| 08 | [autonomous-agent-loop](08-autonomous-agent-loop/) | seven budgets, loop detection, fail-closed exhaustion | `issueRefund` behind a runtime gate | **Agent** | 18 |
+| 09 | [multi-agent-supervisor](09-multi-agent-supervisor/) | separation of authority, typed handoffs, termination rules | `issueRefund`, held by one agent only | **Multi-agent** | 26 |
 
 Projects 06–09 solve the **identical** problem. Diff them. That is the point.
+
+**178 tests, no network, no API key.** Every project's suite runs against a scripted `ChatModel`.
 
 ---
 
@@ -114,7 +116,10 @@ irreversible-action catalogue.
 * [`CLAUDE.md`](CLAUDE.md) — repo conventions the agent must follow.
 * [`.claude/skills/agentic-design-review/SKILL.md`](.claude/skills/agentic-design-review/SKILL.md) — runs the checklist against a diff or design.
 * [`.claude/skills/spring-ai-scaffold/SKILL.md`](.claude/skills/spring-ai-scaffold/SKILL.md) — scaffolds a new CFG-first Spring AI service.
-* [`.claude/projects/`](.claude/projects/) — per-project agent notes (entry points, invariants, what not to touch).
+* [`.claude/projects/00-index.md`](.claude/projects/00-index.md) — per-project briefs **and the
+  Spring AI 2.x trap list**: the three configuration mistakes that make a tool loop silently do
+  nothing, hang, or ignore its own budget. Read it before debugging one.
+* [`.claude/commands/`](.claude/commands/) — `/design-check` and `/cfg`.
 
 ---
 

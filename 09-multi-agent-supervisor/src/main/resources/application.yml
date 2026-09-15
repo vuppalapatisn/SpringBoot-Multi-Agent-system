@@ -1,0 +1,57 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: multi-agent-supervisor
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: 30s
+      max-retries: 2
+      chat:
+        options:
+          # Specialists run on the cheapest model that passes their evals. A planner or a
+          # model-routed supervisor is the place to spend claude-opus-5; this supervisor is code,
+          # so there is nothing to spend it on.
+          model: claude-sonnet-5
+          max-tokens: 600
+          temperature: 0.0
+
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+
+agentic:
+  multi-agent:
+    # ---- TERMINATION RULES ----------------------------------------------
+    # A multi-agent system has all of a single agent's failure modes plus three of its own:
+    # unbounded handoffs, ping-pong, and one specialist burning the whole run.
+    max-handoffs: 6
+    max-model-calls-per-agent: 3
+    max-model-calls-per-run: 8
+    max-wall-clock: PT120S      # multi-agent is the slowest architecture; budget for it
+
+    dry-run: false
+
+    auto-approve-below-minor: 10000      # $100.00
+    dual-control-above-minor: 100000     # $1,000.00
+    max-refund-age-days: 30
+    notification-allowlist:
+      - "@customers.example"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.github.vuppalapatisn.agentic: INFO

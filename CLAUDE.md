@@ -36,19 +36,39 @@ These are enforced by tests and, where possible, by startup validation. Do not w
 * Java 21, records for DTOs, `sealed` where the variant set is closed, no Lombok.
 * Constructor injection only. No field `@Autowired`. Components are package-private where possible.
 * `@ConfigurationProperties` records for config; no `@Value` scattered through beans.
-* Spring AI 2.x API specifics (different from 1.x — do not copy 1.x snippets):
-  - options are **builders**: `.options(AnthropicChatOptions.builder().temperature(0.0))`
-  - tool execution runs through `ToolCallingAdvisor`; framework limits via `spring.ai.tools.limits.*`
+* Spring AI 2.x API specifics (different from 1.x — do not copy 1.x snippets). The full list of
+  traps, with the code that causes them, is
+  [`.claude/projects/00-index.md`](.claude/projects/00-index.md) — **read it before debugging a
+  tool loop that does nothing**. The three that cost the most time:
+  - **tool calling silently skips** unless the *model's* `getOptions()` returns
+    `ToolCallingChatOptions`. A test stub must override it.
+  - **advisor order decides what is inside the tool loop.** Only advisors ordered *above*
+    `ToolCallingAdvisor.DEFAULT_ORDER` (`HIGHEST_PRECEDENCE + 300`) see each iteration; a budget
+    advisor below it counts one turn per call.
+  - **a thrown budget exception becomes a message the model ignores** unless it is listed in
+    `DefaultToolExecutionExceptionProcessor.rethrowExceptions`.
+  - options are **builders**: `.defaultOptions(ChatOptions.builder().temperature(0.0d))`
   - `ToolCallbacks.from(bean)` lives in `org.springframework.ai.support`
-  - the vector-store advisor artifact is `spring-ai-vector-store-advisor`
+  - the vector-store advisor artifact is `spring-ai-vector-store-advisor` (renamed in 2.x)
   - MCP annotations are `org.springframework.ai.mcp.annotation.@McpTool` / `@McpToolParam`
+  - Boot 4: `@AutoConfigureMockMvc` moved to the `spring-boot-webmvc-test` module, package
+    `org.springframework.boot.webmvc.test.autoconfigure`
+  - name chat-client beans `…ChatClient`: an `@Bean ChatClient refundClassifier()` collides with an
+    `@Service RefundClassifier`
 * Prompts live in `src/main/resources/prompts/*.st` — never inline multi-line strings in Java.
 * One package per CFG concern: `web`, `domain`, `tools`, `gate`, `budget`, `audit`, `orchestration`.
 
 ## Testing conventions
 
 * Unit tests use `ScriptedChatModel` (in each project's test sources) — **no network in CI**.
+  It must override `getOptions()` to return `ToolCallingChatOptions` wherever tools are involved.
 * `spring.ai.model.chat=none` in test config so provider autoconfiguration stays out of the way.
+* Inject `Clock`; use a mutable clock for anything time-dependent (expiry, settlement windows,
+  wall-clock budgets). Never `Instant.now()` in production code.
+* **One application context per test class.** Reset in-memory providers and gates in `@BeforeEach`
+  or you will chase "expected 1 but was 2" across unrelated tests.
+* Framework limits (`spring.ai.tools.limits.*`) can fire before an application-level budget. A test
+  that means to exercise the application budget should raise the framework's.
 * Every project must keep these tests green:
   - irreversible tool without a token → refused
   - payload-hash mismatch → refused

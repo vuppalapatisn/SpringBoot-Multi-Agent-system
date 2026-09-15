@@ -20,20 +20,39 @@ Generate code that already satisfies the repo's invariants. **The CFG comes firs
 
 ## Spring AI 2.x API — do not copy 1.x snippets
 
-These differ from 1.x and are the most common source of compile errors:
+Full trap list with the causing code: `.claude/projects/00-index.md`. The essentials:
 
 ```java
-// options are BUILDERS, not instances
-.options(AnthropicChatOptions.builder().temperature(0.0).maxTokens(1024))
+// options are BUILDERS, not instances; ChatOptions.Builder is self-typed generic
+.defaultOptions(ChatOptions.builder().temperature(0.0d).maxTokens(1024))
 
-// ChatOptions.Builder is generic: ChatOptions.Builder<?>
-// tool execution happens in ToolCallingAdvisor; framework limits: spring.ai.tools.limits.*
 // ToolCallbacks.from(bean) → org.springframework.ai.support.ToolCallbacks
 // advisors: implement BaseAdvisor (before/after) — CallAdvisor/StreamAdvisor for full control
 // RAG: org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor
 // QA advisor: org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor
 // MCP annotations: org.springframework.ai.mcp.annotation.{McpTool, McpToolParam}
+// PromptTemplate.builder().resource(resource)   — no Charset overload
 ```
+
+**Three traps that silently produce wrong behaviour rather than a compile error:**
+
+1. **Tool calling does nothing** unless the *model's* `getOptions()` returns
+   `ToolCallingChatOptions`. `DefaultChatClientUtils` builds request options from
+   `chatModel.getOptions().mutate()` and only attaches tool callbacks when that builder is a
+   `ToolCallingChatOptions.Builder`; `ToolCallingAdvisor` then skips the loop entirely. Real
+   providers satisfy this; **test stubs must override `getOptions()`**.
+2. **Advisor order decides what is inside the tool loop.** Only advisors ordered *above*
+   `ToolCallingAdvisor.DEFAULT_ORDER` (`Ordered.HIGHEST_PRECEDENCE + 300`) participate in each
+   iteration. A step/token budget advisor must be above it; a memory or logging advisor below it.
+3. **Budget exhaustion thrown from a tool becomes a message the model ignores**, because a tool
+   exception is converted to text by default. List the exception in
+   `DefaultToolExecutionExceptionProcessor.rethrowExceptions` to make a ceiling a ceiling.
+
+**Boot 4:** `@AutoConfigureMockMvc` lives in the `spring-boot-webmvc-test` module, package
+`org.springframework.boot.webmvc.test.autoconfigure`.
+
+**Bean naming:** name chat clients `…ChatClient`. An `@Bean ChatClient refundClassifier()` collides
+with an `@Service RefundClassifier`.
 
 Artifact names:
 
