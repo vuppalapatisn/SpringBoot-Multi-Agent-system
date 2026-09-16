@@ -110,6 +110,22 @@ Conventions to preserve when touching them:
 silently. For map keys containing a hyphen (the MCP connection name `refund-desk`) relaxed binding
 cannot express it at all; use `SPRING_APPLICATION_JSON`, as `docker-compose.yml` does.
 
+## Model provider
+
+Both `spring-ai-starter-model-anthropic` and `spring-ai-starter-model-google-genai` are on the
+classpath of every project that has a model. `spring.ai.model.chat` selects one, driven by
+`${AI_CHAT_PROVIDER:anthropic}`.
+
+* **Keep `src/main` provider-neutral.** Use `ChatOptions.builder()`, never
+  `AnthropicChatOptions` or `GoogleGenAiChatOptions`. That neutrality is the only reason switching
+  provider is a config change, and `GeminiProviderTest` fails if it is broken.
+* **The selector must stay set.** With both starters present, an unset `spring.ai.model.chat`
+  creates two `ChatModel` beans and the `ChatClient` cannot be built.
+* **Only the active provider's key is required** — an inactive provider's placeholder is never
+  resolved. Do not "fix" this by giving the keys empty defaults: that lets a service start with a
+  blank credential and fail on the first model call instead of at boot.
+* Gemini's token ceiling is `max-output-tokens`, not `max-tokens`.
+
 Adding a project means adding it to: the aggregator `pom.xml`, the root README table,
 `docker-compose.yml`, and the project array in `.github/workflows/docker.yml` (with a matching
 `paths-filter` entry, or it will never build).

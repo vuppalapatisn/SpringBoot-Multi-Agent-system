@@ -20,6 +20,8 @@ Thumbs.db
 
 .env
 .env.*
+# ...but the template must be tracked: it is the documentation of which variables exist.
+!.env.example
 *.pem
 secrets/
 

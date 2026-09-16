@@ -19,6 +19,16 @@ spring:
       schema-locations: classpath:schema.sql
 
   ai:
+    # WHICH PROVIDER IS ACTIVE ------------------------------------------
+    # Both starters are on the classpath, so this has to be set explicitly:
+    # otherwise two ChatModel beans would be created and the ChatClient could
+    # not be built. Values come from SpringAIModels: anthropic | google-genai.
+    #
+    # Only the selected provider's properties are bound, so only its key is
+    # required - a Gemini-only setup never needs ANTHROPIC_API_KEY, and vice versa.
+    model:
+      chat: ${AI_CHAT_PROVIDER:anthropic}
+
     anthropic:
       api-key: ${ANTHROPIC_API_KEY}
       timeout: 30s
@@ -28,6 +38,27 @@ spring:
           model: claude-sonnet-5
           max-tokens: 700
           temperature: 0.0
+
+    # Google Gemini. Active when AI_CHAT_PROVIDER=google-genai.
+    #
+    # GoogleGenAiChatOptions implements ToolCallingChatOptions and
+    # StructuredOutputChatOptions - the same pair as AnthropicChatOptions - so tool
+    # calling and structured output (.entity()) work without any code change.
+    #
+    # api-key alone selects the Gemini Developer API (a key from aistudio.google.com).
+    # For Vertex AI instead, set project-id, location and vertex-ai: true.
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY}
+        chat:
+          options:
+            # gemini-2.5-flash is the broadly available fast tier. gemini-2.5-pro for
+            # planner or supervisor roles; newer 3.x names exist but availability varies
+            # by account, so the default here is the safe one.
+            model: ${GEMINI_MODEL:gemini-2.5-flash}
+            temperature: 0.0
+            # note the name: Gemini calls this max-output-tokens, not max-tokens
+            max-output-tokens: 700
     chat:
       client:
         observations:

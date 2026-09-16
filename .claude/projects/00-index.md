@@ -63,6 +63,34 @@ DefaultToolExecutionExceptionProcessor.builder()
         .build();
 ```
 
+### Swapping the model provider
+
+Verified at 2.0.1. `spring.ai.model.chat` selects the active auto-configuration; values are the
+constants in `org.springframework.ai.model.SpringAIModels`:
+
+| | Anthropic | Google Gemini |
+|---|---|---|
+| starter | `spring-ai-starter-model-anthropic` | `spring-ai-starter-model-google-genai` |
+| selector | `anthropic` | `google-genai` |
+| key | `spring.ai.anthropic.api-key` | `spring.ai.google.genai.api-key` |
+| token ceiling | `max-tokens` | **`max-output-tokens`** |
+
+Both starters are on the classpath in this repo, so the selector **must** be set — otherwise two
+`ChatModel` beans exist and the `ChatClient` cannot be built. `application.yml` sets it from
+`${AI_CHAT_PROVIDER:anthropic}`.
+
+**Only the active provider's properties are bound**, so only its key is required: an inactive
+provider's `${…_API_KEY}` placeholder is never resolved. `GeminiProviderTest` in project 01 proves
+this by booting the context on Gemini with no Anthropic key present.
+
+`GoogleGenAiChatOptions implements ToolCallingChatOptions, StructuredOutputChatOptions` — the same
+pair as `AnthropicChatOptions` — which is why tool calling and `.entity()` work on either. A model
+whose options lack `ToolCallingChatOptions` silently does no tool calling at all (see above).
+
+Note: Spring AI ships `GoogleGenAiToolCallingManager` for Gemini's stricter tool JSON schemas and
+does **not** wire it by default. Register it if a Gemini tool call fails with a schema complaint.
+The old `vertex-ai-gemini` module no longer exists at 2.x; it is `google-genai` now.
+
 ### Module renames and relocations
 
 | 1.x / Boot 3 | 2.x / Boot 4 |

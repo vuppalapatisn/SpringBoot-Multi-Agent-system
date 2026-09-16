@@ -1,24 +1,41 @@
 # Run any or all of the nine projects locally.
 #
-#   export ANTHROPIC_API_KEY=sk-ant-...
-#   docker compose build                      # all nine images
-#   docker compose up 06-workflow             # just one
+#   cp .env.example .env        # then put your key in it
+#   docker compose build        # all nine images
+#   docker compose up 06-workflow                   # just one
 #   docker compose up 04-mcp-server 05-mcp-client   # the MCP pair, in dependency order
 #
 # Project NN listens on port 808N, so everything can run side by side.
 #
-# ANTHROPIC_API_KEY is passed through rather than defaulted: application.yml resolves it with no
-# fallback, so a service started without it fails immediately and says so. Project 04 needs no
-# key at all - an MCP server has no model in it.
+# CHOOSING A MODEL PROVIDER
+# -------------------------
+# Put one of these in .env:
+#
+#   AI_CHAT_PROVIDER=anthropic       ANTHROPIC_API_KEY=sk-ant-...
+#   AI_CHAT_PROVIDER=google-genai    GEMINI_API_KEY=AIza...
+#
+# Only the selected provider's key is needed. Nothing in src/main is provider-specific, so
+# switching is configuration - see GeminiProviderTest in project 01, which boots the whole
+# context on Gemini with no Anthropic key present at all.
+#
+# Everything reaches the containers through env_file rather than explicit `environment:` entries.
+# That is deliberate: a variable absent from .env is absent from the container, so the app's
+# placeholder stays unresolved and it fails fast with a clear message. Passing an empty string
+# instead would let it start with a blank key and fail later at the first model call.
 
 name: agentic-reference
 
 x-common: &common
   restart: unless-stopped
-  # A sane ceiling per container, and the images use -XX:MaxRAMPercentage=75 so the JVM reads it.
+  # A sane ceiling per container. It is a limit, not a reservation, and the images use
+  # -XX:MaxRAMPercentage=75 so the JVM sizes its heap from it.
   mem_limit: 1g
+  env_file:
+    # required: false so `docker compose` still works before you have made a .env - useful for
+    # project 04, which needs no key of any kind. Needs Compose v2.24+ (Docker Desktop 4.27+).
+    - path: .env
+      required: false
   environment: &common-env
-    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY, or use project 04 which needs none}
     JAVA_OPTS: -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError
 
 services:
@@ -38,14 +55,13 @@ services:
     ports: ["8082:8082"]
     environment:
       <<: *common-env
-      # The kill switch, as an environment variable: EXECUTE | DRY_RUN | DISABLED.
-      # Changing it needs a restart, not a rebuild.
+      # The kill switch: EXECUTE | DRY_RUN | DISABLED. A restart, not a rebuild.
       #
       # Note the name. Spring's relaxed binding replaces dots with underscores and *removes*
       # hyphens, so agentic.tools.execution-mode is AGENTIC_TOOLS_EXECUTIONMODE.
       # AGENTIC_TOOLS_EXECUTION_MODE would bind to agentic.tools.execution.mode, which does not
-      # exist, and would be silently ignored - a kill switch that does nothing.
-      AGENTIC_TOOLS_EXECUTIONMODE: EXECUTE
+      # exist, and would be ignored silently - a kill switch that does nothing.
+      AGENTIC_TOOLS_EXECUTIONMODE: ${AGENTIC_TOOLS_EXECUTIONMODE:-EXECUTE}
 
   03-rag:
     <<: *common
@@ -55,18 +71,18 @@ services:
     ports: ["8083:8083"]
 
   04-mcp-server:
-    # Deliberately does NOT inherit *common: this project has no model, so requiring
-    # ANTHROPIC_API_KEY would be a lie that stops it starting.
-    restart: unless-stopped
-    mem_limit: 1g
+    <<: *common
     image: agentic/mcp-server-tools:local
     build:
       context: ./04-mcp-server-tools
     ports: ["8084:8084"]
     environment:
-      JAVA_OPTS: -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError
-      # The server's own kill switch. Reads keep working when it is off.
-      AGENTIC_MCPSERVER_EXECUTIONENABLED: "true"
+      <<: *common-env
+      # This project has no model and needs no API key at all - which is exactly why it has to
+      # enforce its own policy rather than trust a well-behaved caller.
+      #
+      # Its own kill switch. Reads keep working when it is off.
+      AGENTIC_MCPSERVER_EXECUTIONENABLED: ${AGENTIC_MCPSERVER_EXECUTIONENABLED:-true}
 
   05-mcp-client:
     <<: *common
@@ -82,7 +98,8 @@ services:
     environment:
       <<: *common-env
       # The MCP connection is a map entry whose key contains a hyphen, which environment-variable
-      # relaxed binding cannot express reliably. SPRING_APPLICATION_JSON is unambiguous.
+      # relaxed binding cannot express. SPRING_APPLICATION_JSON is unambiguous. The host is the
+      # compose service name, resolved by Docker's DNS - not localhost.
       SPRING_APPLICATION_JSON: >-
         {"spring":{"ai":{"mcp":{"client":{"streamable-http":{"connections":
         {"refund-desk":{"url":"http://04-mcp-server:8084","endpoint":"/mcp"}}}}}}}}

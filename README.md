@@ -72,11 +72,23 @@ Read in this order.
 
 ## Quick start
 
-Prerequisites: **JDK 21+**, **Maven 3.9+**, and an Anthropic API key.
+Prerequisites: **JDK 21+**, **Maven 3.9+**, and a key for one model provider.
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...            # the default provider
 ```
+
+**Google Gemini works too**, as a configuration change — no code edits:
+
+```bash
+export AI_CHAT_PROVIDER=google-genai
+export GEMINI_API_KEY=AIza...                  # from aistudio.google.com/apikey
+```
+
+Only the selected provider's key is required. Both starters are on the classpath and
+`spring.ai.model.chat` picks one; nothing in `src/main` imports a provider-specific type, because
+every `ChatClient` is built with the neutral `ChatOptions.builder()`. Details and the property
+mapping: [docs/RUNNING-WITH-DOCKER.md §2a](docs/RUNNING-WITH-DOCKER.md#2a-using-google-gemini-instead-of-anthropic).
 
 Build everything (no API key needed — tests use a scripted `ChatModel`):
 
@@ -179,6 +191,7 @@ much cheaper than a cluster for finding that out.
 | Spring AI | 2.0.1 | `ChatClient`, advisors, tools, RAG, MCP |
 | MCP Java SDK | 2.0.0 | via `spring-ai-starter-mcp-*` |
 | Default model | `claude-sonnet-5` | `claude-opus-5` for planner/supervisor roles |
+| Alternative provider | Google Gemini | `spring-ai-starter-model-google-genai`, default `gemini-2.5-flash`; switch with one env var |
 | Observability | Micrometer + Actuator | `spring.ai.chat.client.observations.*` |
 
 > Spring AI 2.x moved options to builders (`ChatOptions.Builder`), moved tool execution into

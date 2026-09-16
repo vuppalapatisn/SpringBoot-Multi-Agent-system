@@ -51,6 +51,15 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-anthropic</artifactId>
         </dependency>
+        <!--
+            Both providers are on the classpath; spring.ai.model.chat decides which one is active
+            at run time. Nothing in the Java code is provider-specific - every ChatClient uses the
+            neutral ChatOptions.builder() - so switching is configuration, not a code change.
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-google-genai</artifactId>
+        </dependency>
         <!-- Modular RAG: query transformers, retrievers, augmenters, RetrievalAugmentationAdvisor -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

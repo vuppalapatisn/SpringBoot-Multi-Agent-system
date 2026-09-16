@@ -2,8 +2,17 @@
 
 Step by step, including every value you need to supply.
 
-**Short version:** there is exactly **one** variable to set — `ANTHROPIC_API_KEY` — and eight of the
-nine projects need it. Project 04 needs nothing, because an MCP server has no model in it.
+**Short version:** pick a provider and give it a key. Two variables:
+
+```bash
+AI_CHAT_PROVIDER=anthropic       ANTHROPIC_API_KEY=sk-ant-...
+# or
+AI_CHAT_PROVIDER=google-genai    GEMINI_API_KEY=AIza...
+```
+
+Only the selected provider's key is required. Project 04 needs neither, because an MCP server has
+no model in it. See [§2](#2-provide-the-one-value-you-need) and
+[§2a](#2a-using-google-gemini-instead-of-anthropic).
 
 ---
 
@@ -49,39 +58,125 @@ cd SpringBoot-Multi-Agent-system
 
 ## 2. Provide the one value you need
 
-Get a key from [console.anthropic.com](https://console.anthropic.com/) → **API Keys**. It looks like
-`sk-ant-api03-…`.
-
-Create a `.env` file in the repository root. Compose reads it automatically, and `.env` is already
-in `.gitignore`, so the key cannot be committed by accident:
+Copy the template and fill in a key:
 
 ```bash
-cat > .env <<'EOF'
-ANTHROPIC_API_KEY=sk-ant-api03-replace-me
-EOF
+cp .env.example .env
+```
+
+`.env` is gitignored, so the key cannot be committed by accident. Compose injects it into the
+containers with `env_file`, which matters: a variable **absent** from `.env` is absent from the
+container, so the application's placeholder stays unresolved and it fails fast with a clear
+message. Passing an empty string instead would let it start with a blank key and fail later, on the
+first model call.
+
+For Anthropic (the default), get a key from
+[console.anthropic.com](https://console.anthropic.com/) → **API Keys**; it looks like
+`sk-ant-api03-…`. Your `.env` then reads:
+
+```bash
+AI_CHAT_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-api03-…
 ```
 
 That is the whole configuration. Everything else has a working default.
-
-> **Why `.env` and not `export`?** Both work, but `docker compose` interpolates the entire file
-> before it picks which services to start — so the variable has to be set even when you only want
-> project 04, which does not use it. A `.env` file makes that a non-issue. If you would rather not
-> create one, prefix the command instead:
-> `ANTHROPIC_API_KEY=unused docker compose up 04-mcp-server`
 
 ### Every variable, and whether you need it
 
 | Variable | Needed? | Default | What it does |
 |----------|---------|---------|--------------|
-| `ANTHROPIC_API_KEY` | **yes**, for 8 of 9 | none — startup fails loudly without it | the model provider credential. Never baked into an image. |
+| `AI_CHAT_PROVIDER` | no | `anthropic` | `anthropic` \| `google-genai`. Which provider is active. |
+| `ANTHROPIC_API_KEY` | only if provider is `anthropic` | none — startup fails loudly | Anthropic credential. Never baked into an image. |
+| `GEMINI_API_KEY` | only if provider is `google-genai` | none — startup fails loudly | Gemini credential. |
+| `GEMINI_MODEL` | no | `gemini-2.5-flash` | which Gemini model to use |
 | `JAVA_OPTS` | no | `-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError` | JVM flags. The percentage means one image behaves sensibly under any memory limit. |
 | `AGENTIC_TOOLS_EXECUTIONMODE` | no | `EXECUTE` | project 02's kill switch: `EXECUTE` \| `DRY_RUN` \| `DISABLED` |
 | `AGENTIC_MCPSERVER_EXECUTIONENABLED` | no | `true` | project 04's kill switch. `false` stops refunds; reads keep working. |
 | `SPRING_APPLICATION_JSON` | no | set for you | how project 05 is pointed at project 04. See [§5](#5-the-mcp-pair). |
 
-**Project 04 needs no API key at all.** That is the point of it: an MCP server is an ordinary Spring
-Boot service that publishes tools, which is exactly why it has to enforce its own policy rather than
-trust a well-behaved caller.
+**Project 04 needs no API key at all**, from either provider. That is the point of it: an MCP server
+is an ordinary Spring Boot service that publishes tools, which is exactly why it has to enforce its
+own policy rather than trust a well-behaved caller. `docker compose up 04-mcp-server` works with no
+`.env` at all.
+
+---
+
+## 2a. Using Google Gemini instead of Anthropic
+
+Supported, and it is a **configuration change only** — no code, no rebuild of anything but the
+config. Put this in `.env`:
+
+```bash
+AI_CHAT_PROVIDER=google-genai
+GEMINI_API_KEY=AIza…
+# optional
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Get the key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (the Gemini
+Developer API). Then run as normal:
+
+```bash
+docker compose up -d 06-workflow
+```
+
+### Why it works without touching the code
+
+Nothing in `src/main` imports a provider-specific type — every `ChatClient` is built with the
+neutral `ChatOptions.builder()`. Both starters are on the classpath and
+`spring.ai.model.chat` decides which auto-configuration activates.
+
+The compatibility question that actually matters is whether Gemini's options carry the two
+capabilities this repository leans on, and they do:
+
+```java
+public class GoogleGenAiChatOptions
+        implements ToolCallingChatOptions, StructuredOutputChatOptions
+```
+
+That is the same pair as `AnthropicChatOptions`. Tool calling is skipped entirely by
+`ToolCallingAdvisor` unless the model's options implement `ToolCallingChatOptions`, and `.entity()`
+structured output relies on `StructuredOutputChatOptions` — so projects 02, 05, 08 and 09 work on
+either provider.
+
+This is asserted rather than asserted-in-prose:
+[`GeminiProviderTest`](../01-chatclient-foundation/src/test/java/io/github/vuppalapatisn/agentic/foundation/GeminiProviderTest.java)
+boots the whole application context on Gemini **with no Anthropic key present at all**, and checks
+both interfaces and the bound model name.
+
+### Property mapping
+
+| Concept | Anthropic | Gemini |
+|---------|-----------|--------|
+| starter | `spring-ai-starter-model-anthropic` | `spring-ai-starter-model-google-genai` |
+| selector value | `anthropic` | `google-genai` |
+| key | `spring.ai.anthropic.api-key` | `spring.ai.google.genai.api-key` |
+| model | `spring.ai.anthropic.chat.options.model` | `spring.ai.google.genai.chat.options.model` |
+| token ceiling | `…chat.options.max-tokens` | `…chat.options.max-output-tokens` |
+| default here | `claude-sonnet-5` | `gemini-2.5-flash` |
+
+### Vertex AI instead of the Developer API
+
+An API key selects the Gemini Developer API. For Vertex AI, drop `GEMINI_API_KEY` and set:
+
+```bash
+SPRING_AI_GOOGLE_GENAI_VERTEXAI=true
+SPRING_AI_GOOGLE_GENAI_PROJECTID=your-gcp-project
+SPRING_AI_GOOGLE_GENAI_LOCATION=europe-west1
+```
+
+…and mount application-default credentials into the container. If both a key and project/location
+are present, Spring AI logs which one it chose and defaults to the Developer API.
+
+### Two caveats worth knowing
+
+* **Project 03's embeddings are unaffected.** It uses the repo's own offline
+  `HashingEmbeddingModel`, so RAG behaves identically on either provider. If you want real
+  embeddings, `spring-ai-starter-model-google-genai-embedding` exists at the same version.
+* **Gemini is stricter about tool JSON schemas** than Anthropic. Spring AI ships a
+  `GoogleGenAiToolCallingManager` decorator for exactly this, and it is *not* wired by default. If
+  a tool call fails with a schema complaint on Gemini, register that manager as a bean. None of the
+  tools here has hit it, but they are deliberately simple — single `String` parameters.
 
 ---
 
@@ -248,9 +343,12 @@ fewer services — two or three at a time is how this repo is normally used.
 | Symptom | Cause and fix |
 |---------|---------------|
 | `Cannot connect to the Docker daemon` | Docker Desktop is not running. Launch it and wait for the menu-bar icon to settle. |
-| `error while interpolating services: required variable ANTHROPIC_API_KEY is missing` | No `.env` and no exported variable. See [§2](#2-provide-the-one-value-you-need). Compose interpolates the whole file, so this happens even for project 04. |
-| Container exits at once; log says `Could not resolve placeholder 'ANTHROPIC_API_KEY'` | The variable reached compose but not the container. Check `docker compose config` shows a value, and that `.env` is in the repo root next to `docker-compose.yml`. |
-| `401` / `authentication_error` from the provider | The key is present but wrong, revoked, or has no credit. `curl` it directly against the Anthropic API to confirm. |
+| Container exits at once; log says `Could not resolve placeholder 'ANTHROPIC_API_KEY'` | The active provider's key is not reaching the container. Check `.env` sits next to `docker-compose.yml`, and that `AI_CHAT_PROVIDER` matches the key you supplied. |
+| Same, but `'GEMINI_API_KEY'` | You set `AI_CHAT_PROVIDER=google-genai` without `GEMINI_API_KEY`. See [§2a](#2a-using-google-gemini-instead-of-anthropic). |
+| `401` / `authentication_error` / `API_KEY_INVALID` | The key is present but wrong, revoked, or out of credit. Test it directly against the provider's API. |
+| Startup fails with two `ChatModel` candidates | `spring.ai.model.chat` is not set. Both starters are on the classpath by design; the selector must pick one. `AI_CHAT_PROVIDER` supplies it and defaults to `anthropic`. |
+| Gemini tool call fails complaining about the schema | Gemini is stricter than Anthropic here. Register Spring AI's `GoogleGenAiToolCallingManager` — see the caveats in [§2a](#2a-using-google-gemini-instead-of-anthropic). |
+| `env_file … required` rejected by compose | Compose older than v2.24. Update Docker Desktop, or change `env_file` to the plain `- .env` form and create the file. |
 | `Bind for 0.0.0.0:8086 failed: port is already allocated` | Something else holds the port: `lsof -i :8086`. Stop it, or remap in compose (`"9086:8086"`). |
 | Status stuck at `(health: starting)` | Give it ~45 s. If it stays there: `docker compose logs <service>`. |
 | Exit code `137` | OOM-killed. See [§8](#8-memory). |
