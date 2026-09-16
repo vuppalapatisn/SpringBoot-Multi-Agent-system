@@ -36,7 +36,7 @@ ceilings, and the choice of architecture.
 
 | # | Project | What it teaches | Irreversible actions | Architecture | Tests |
 |---|---------|-----------------|----------------------|--------------|-------|
-| 01 | [chatclient-foundation](01-chatclient-foundation/) | `ChatClient`, prompts, structured output, memory, advisors, observability | none (read-only) | Linear call | 10 |
+| 01 | [chatclient-foundation](01-chatclient-foundation/) | `ChatClient`, prompts, structured output, memory, advisors, observability | none (read-only) | Linear call | 14 |
 | 02 | [tool-calling-guardrails](02-tool-calling-guardrails/) | tool boundary classes in code, tiered gate, frozen approvals, idempotency, dry-run, audit | `issueRefund`, `notifyCustomer` | Gated tool loop | 38 |
 | 03 | [rag-grounded-answers](03-rag-grounded-answers/) | ingestion, vector store, `RetrievalAugmentationAdvisor`, groundedness gate, tenant isolation | none (read-only) | Retrieve → augment → **verify** | 19 |
 | 04 | [mcp-server-tools](04-mcp-server-tools/) | MCP server, `@McpTool`, hints as a contract, server-side policy, separation of duty | `issueRefund` (approval-required) | Tool provider | 17 |
@@ -48,7 +48,7 @@ ceilings, and the choice of architecture.
 
 Projects 06–09 solve the **identical** problem. Diff them. That is the point.
 
-**178 tests, no network, no API key.** Every project's suite runs against a scripted `ChatModel`.
+**182 tests, no network, no API key.** Every project's suite runs against a scripted `ChatModel`.
 
 ---
 
@@ -58,6 +58,7 @@ Read in this order.
 
 | Doc | Why |
 |-----|-----|
+| [Architecture & Dataflow](docs/ARCHITECTURE.md) | **Start here for the shape of the system**: context, layering, component diagrams, DFDs with trust boundaries, key sequences, deployment. |
 | [00 — Design Checklist](docs/00-DESIGN-CHECKLIST.md) | The reusable checklist. 10 phases, release gates, sign-off table. |
 | [01 — Control-Flow Graph Method](docs/01-CONTROL-FLOW-GRAPH.md) | Notation, drawing rules, worked examples, anti-patterns. |
 | [02 — Architecture Comparison](docs/02-ARCHITECTURE-COMPARISON.md) | Workflow vs state machine vs agent: decision matrix, cost, failure modes. |
@@ -168,7 +169,7 @@ docker run --rm -p 8082:8082 -e ANTHROPIC_API_KEY \
 
 | Workflow | Trigger | Does |
 |----------|---------|------|
-| [`build.yml`](.github/workflows/build.yml) | push, PR | `mvn clean verify` — all nine projects, 178 tests, no API key |
+| [`build.yml`](.github/workflows/build.yml) | push, PR | `mvn clean verify` — all nine projects, 182 tests, no API key |
 | [`docker.yml`](.github/workflows/docker.yml) | push, tag, PR, manual | builds an image **per changed project**, smoke-tests `/actuator/health`, publishes to GHCR on `main` |
 
 `docker.yml` only builds the projects a commit actually touched (a change to the root pom or the

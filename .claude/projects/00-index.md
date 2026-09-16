@@ -6,7 +6,7 @@ break, where the tests are.
 
 | # | Project | Brief | Teaches | Irreversible actions | Tests |
 |---|---------|-------|---------|----------------------|-------|
-| 01 | `01-chatclient-foundation` | [brief](01-chatclient-foundation.md) | ChatClient, structured output, memory, advisors | none | 10 |
+| 01 | `01-chatclient-foundation` | [brief](01-chatclient-foundation.md) | ChatClient, structured output, memory, advisors | none | 14 |
 | 02 | `02-tool-calling-guardrails` | [brief](02-tool-calling-guardrails.md) | tool boundaries, gates, approvals, idempotency | 2 | 38 |
 | 03 | `03-rag-grounded-answers` | [brief](03-rag-grounded-answers.md) | RAG + groundedness gate + tenant isolation | none | 19 |
 | 04 | `04-mcp-server-tools` | [brief](04-mcp-server-tools.md) | MCP server, server-side policy, separation of duty | 1 | 17 |
@@ -18,6 +18,12 @@ break, where the tests are.
 
 Projects **06–09 solve the identical problem**. When comparing architectures, diff them.
 Projects **04 + 05** are a pair: run the server, then point the client at it.
+
+182 tests in total, none of which touch the network.
+
+For how the nine fit together — system context, the layering they share, dataflow with trust
+boundaries, and the deployment topology — see [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+It is the structural counterpart to the per-project `docs/CFG.md`.
 
 ---
 

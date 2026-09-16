@@ -12,6 +12,23 @@ If a change adds a tool, a model-chosen edge, a loop, or an effect, the CFG and 
 irreversible-action catalogue are part of the diff. A PR that changes behaviour without touching
 `docs/CFG.md` is incomplete.
 
+A change that alters **structure** — a new component, layer, external system, trust boundary, port
+or container — updates [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) too; §7 of that file maps
+change to section. The per-project `docs/CFG.md` owns control flow, `ARCHITECTURE.md` owns
+structure and dataflow. Do not let them contradict each other.
+
+Its diagrams are Mermaid, so they can be checked rather than eyeballed:
+
+```bash
+mkdir -p target/diagrams && npx -y @mermaid-js/mermaid-cli -i docs/ARCHITECTURE.md -o target/diagrams/arch.md
+```
+
+That renders every block to SVG and reports a parse error per block. The output directory must
+already exist or it exits without rendering anything (and with status 0 — do not trust the exit code
+alone, check that the SVGs appeared). Two traps found this way: `;` is a **statement separator**
+inside `sequenceDiagram`, so a semicolon in `Note over` text is a syntax error; and a `flowchart TB`
+of a long linear pipeline renders thousands of pixels tall — split it or use `LR`.
+
 Run `/design-check` (see `.claude/commands/`) or the `agentic-design-review` skill before opening a PR.
 
 ## Non-negotiable invariants
