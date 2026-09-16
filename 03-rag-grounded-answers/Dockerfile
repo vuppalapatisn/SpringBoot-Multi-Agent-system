@@ -61,7 +61,9 @@ EXPOSE 8083
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 
 # busybox wget ships in the Alpine base, so this needs no extra package.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=45s --retries=3 \
+# interval is short so docker compose ps reports healthy within ~10s of a successful start,
+# and a depends_on: service_healthy wait does not look like a hang. start-period covers JVM boot.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=45s --retries=6 \
   CMD wget -q --spider http://localhost:8083/actuator/health || exit 1
 
 # exec inside the shell so the JVM becomes PID 1 and receives SIGTERM directly, which is

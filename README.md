@@ -66,6 +66,7 @@ Read in this order.
 | [05 — Observability & Evaluation](docs/05-OBSERVABILITY-AND-EVALS.md) | Traces, metrics, replay, offline evals, online guardrails. |
 | [06 — Production Readiness](docs/06-PRODUCTION-READINESS.md) | The go-live gate: security, cost, SLOs, runbook. |
 | [Templates](docs/templates/) | Blank CFG + design-review templates to copy into your own repos. |
+| [Running with Docker](docs/RUNNING-WITH-DOCKER.md) | Step-by-step for Docker Desktop on macOS: every variable, the MCP pair, kill switches, troubleshooting. |
 
 ---
 
@@ -115,6 +116,13 @@ export ANTHROPIC_API_KEY=sk-ant-...
 docker compose build
 docker compose up 04-mcp-server 05-mcp-client      # client waits for the server to be healthy
 ```
+
+**Step-by-step, including every value you need to supply:**
+[docs/RUNNING-WITH-DOCKER.md](docs/RUNNING-WITH-DOCKER.md) — written for Docker Desktop on macOS
+(Apple Silicon builds natively; both base images are multi-arch), and applicable to Linux and
+Windows with the obvious substitutions.
+
+There is exactly **one** variable to set: `ANTHROPIC_API_KEY`, needed by eight of the nine projects.
 
 What the images do, and why:
 
