@@ -1,0 +1,9 @@
+# Keep the build context small and the dependency layer stable.
+target/
+data/
+docs/
+*.md
+*.log
+.git/
+.gitattributes
+.gitignore

@@ -1,3 +1,7 @@
+server:
+  # Project NN listens on 808N, so all nine can run side by side. See docker-compose.yml.
+  port: 8083
+
 spring:
   application:
     name: rag-grounded-answers

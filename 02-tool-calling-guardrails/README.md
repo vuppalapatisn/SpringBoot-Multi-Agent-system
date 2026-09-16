@@ -144,23 +144,23 @@ mvn spring-boot:run
 Automatic tier — \$89.90, low risk, 3 days old:
 
 ```bash
-curl -s localhost:8080/api/refunds/handle -H 'Content-Type: application/json' \
+curl -s localhost:8082/api/refunds/handle -H 'Content-Type: application/json' \
   -d '{"orderId":"A-1204","message":"The cable stopped working after two days."}'
 ```
 
 Approval tier — \$240:
 
 ```bash
-curl -s localhost:8080/api/refunds/handle -H 'Content-Type: application/json' \
+curl -s localhost:8082/api/refunds/handle -H 'Content-Type: application/json' \
   -d '{"orderId":"A-1187","message":"The parcel never arrived."}'
 ```
 
 ```bash
-curl -s localhost:8080/api/approvals
+curl -s localhost:8082/api/approvals
 ```
 
 ```bash
-curl -s -X POST localhost:8080/api/approvals/ap-1a2b3c4d/approve \
+curl -s -X POST localhost:8082/api/approvals/ap-1a2b3c4d/approve \
   -H 'Content-Type: application/json' -d '{"approver":"u-114"}'
 ```
 
@@ -172,6 +172,19 @@ Flip the kill switch:
 ```bash
 SPRING_APPLICATION_JSON='{"agentic":{"tools":{"execution-mode":"DRY_RUN"}}}' mvn spring-boot:run
 ```
+
+In a container, the same switch is an environment variable — which is the point of a kill switch
+you can change without a deploy:
+
+```bash
+docker run --rm -p 8082:8082 -e ANTHROPIC_API_KEY \
+  -e AGENTIC_TOOLS_EXECUTIONMODE=DRY_RUN agentic/tool-calling-guardrails
+```
+
+Mind the name: Spring's relaxed binding replaces dots with underscores and **removes hyphens**, so
+`agentic.tools.execution-mode` is `AGENTIC_TOOLS_EXECUTIONMODE`. `AGENTIC_TOOLS_EXECUTION_MODE`
+would bind to `agentic.tools.execution.mode`, which does not exist — a kill switch that silently
+does nothing is worse than no kill switch.
 
 ### Endpoints
 

@@ -92,6 +92,74 @@ cd 01-chatclient-foundation && mvn spring-boot:run
 Each project's `README.md` lists its endpoints, its control-flow graph, and its
 irreversible-action catalogue.
 
+**Project NN listens on port 808N** (01 → 8081 … 09 → 8089), so all nine can run side by side.
+
+---
+
+## Containers
+
+Every project has its own `Dockerfile`, and the build context is just that project's directory —
+each one declares `spring-boot-starter-parent` with an empty `<relativePath/>`, so it builds
+standalone without the aggregator pom.
+
+```bash
+cd 06-workflow-orchestration
+docker build -t agentic/workflow-orchestration .
+docker run --rm -p 8086:8086 -e ANTHROPIC_API_KEY agentic/workflow-orchestration
+```
+
+Or the whole set, including the MCP server/client pair wired together:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+docker compose build
+docker compose up 04-mcp-server 05-mcp-client      # client waits for the server to be healthy
+```
+
+What the images do, and why:
+
+| Choice | Reason |
+|--------|--------|
+| Multi-stage, `maven:3.9-eclipse-temurin-21-alpine` → `eclipse-temurin:21-jre-alpine` | no build tooling or source in the runtime image |
+| `pom.xml` copied before `src` | the dependency layer is invalidated only when dependencies change |
+| **Layered jar extraction** (`-Djarmode=tools … extract --layers`) | a code change re-pushes one thin layer, not every jar |
+| Non-root `app` user | an agentic service holds provider credentials; least authority applies to the container too |
+| `-XX:MaxRAMPercentage=75` | the JVM reads the cgroup limit, so one image behaves under any `--memory` |
+| `exec java …` via `sh -c` | the JVM is PID 1 and gets `SIGTERM`, which is what makes graceful shutdown work |
+| `HEALTHCHECK` on `/actuator/health` | busybox `wget` is already in the Alpine base, so no extra package |
+| `ANTHROPIC_API_KEY` never baked in | passed at run time; a container started without it fails fast and says so |
+
+Project **04 needs no API key** — an MCP server has no model in it. Project **07 mounts a volume**
+at `/app/data`, because durable approvals surviving a restart is the property it exists to prove.
+
+The kill switches are environment variables, so they can be flipped without a rebuild:
+
+```bash
+docker run --rm -p 8082:8082 -e ANTHROPIC_API_KEY \
+  -e AGENTIC_TOOLS_EXECUTIONMODE=DRY_RUN agentic/tool-calling-guardrails
+```
+
+> Mind that name. Spring's relaxed binding replaces dots with underscores and **removes hyphens**,
+> so `agentic.tools.execution-mode` is `AGENTIC_TOOLS_EXECUTIONMODE`.
+> `AGENTIC_TOOLS_EXECUTION_MODE` binds to `agentic.tools.execution.mode`, which does not exist, and
+> is ignored silently — a kill switch that quietly does nothing is worse than none.
+
+### CI
+
+| Workflow | Trigger | Does |
+|----------|---------|------|
+| [`build.yml`](.github/workflows/build.yml) | push, PR | `mvn clean verify` — all nine projects, 178 tests, no API key |
+| [`docker.yml`](.github/workflows/docker.yml) | push, tag, PR, manual | builds an image **per changed project**, smoke-tests `/actuator/health`, publishes to GHCR on `main` |
+
+`docker.yml` only builds the projects a commit actually touched (a change to the root pom or the
+workflow itself builds all nine). Images are published as
+`ghcr.io/vuppalapatisn/<artifactId>` using the built-in `GITHUB_TOKEN`, so **no secrets need
+configuring**. Pull requests build and smoke-test but publish nothing.
+
+The smoke test is the part worth keeping: it starts each image with a fake key and fails the build
+unless `/actuator/health` reports `UP`. An image that cannot boot is not a built image, and CI is
+much cheaper than a cluster for finding that out.
+
 ---
 
 ## Stack

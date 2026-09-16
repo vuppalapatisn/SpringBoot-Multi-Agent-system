@@ -81,17 +81,24 @@ mvn spring-boot:run
 ```
 
 ```bash
-curl -s localhost:8080/api/refunds/classify -H 'Content-Type: application/json' \
+curl -s localhost:8081/api/refunds/classify -H 'Content-Type: application/json' \
   -d '{"orderId":"A-1187","message":"The parcel never arrived and I want my money back."}'
 ```
 
 ```bash
-curl -N -s localhost:8080/api/refunds/draft/stream -H 'Content-Type: application/json' \
+curl -N -s localhost:8081/api/refunds/draft/stream -H 'Content-Type: application/json' \
   -d '{"orderId":"A-1204","message":"Cable stopped working after two days."}'
 ```
 
 ```bash
-curl -s localhost:8080/api/refunds/runs/r-1a2b3c4d/decisions
+curl -s localhost:8081/api/refunds/runs/r-1a2b3c4d/decisions
+```
+
+Or in a container:
+
+```bash
+docker build -t agentic/chatclient-foundation .
+docker run --rm -p 8081:8081 -e ANTHROPIC_API_KEY agentic/chatclient-foundation
 ```
 
 Seeded orders: `A-1187` (\$240, delivered, 9 days), `A-1204` (\$89.90, delivered, 3 days),

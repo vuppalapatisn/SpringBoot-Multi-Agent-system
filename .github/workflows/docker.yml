@@ -1,0 +1,226 @@
+name: docker
+
+# Builds a container image per project when that project is committed.
+#
+# Three deliberate choices:
+#
+#  * Only the projects a commit actually touched are built. Nine unconditional image builds on
+#    every push is a lot of CI for a repo where a typical change lives in one directory. A change
+#    to a shared file, a tag, or a manual run builds all nine.
+#  * Images go to GHCR using the built-in GITHUB_TOKEN, so this needs no configured secrets.
+#  * Every image is smoke-tested against /actuator/health before it is considered built. A Spring
+#    Boot image that cannot start is not a working image, and CI is the cheapest place to find out.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_all:
+        description: 'Build all nine images regardless of what changed'
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Decide which projects need building
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      projects: ${{ steps.select.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Skipped for tags and manual runs, where "what changed" is not the question being asked
+      # and the filter has no sensible base to diff against.
+      - name: Detect changed paths
+        id: filter
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared: ['pom.xml', '.github/workflows/docker.yml']
+            p01: ['01-chatclient-foundation/**']
+            p02: ['02-tool-calling-guardrails/**']
+            p03: ['03-rag-grounded-answers/**']
+            p04: ['04-mcp-server-tools/**']
+            p05: ['05-mcp-client-agent/**']
+            p06: ['06-workflow-orchestration/**']
+            p07: ['07-state-machine-orchestration/**']
+            p08: ['08-autonomous-agent-loop/**']
+            p09: ['09-multi-agent-supervisor/**']
+
+      - name: Select the build matrix
+        id: select
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DISPATCH_ALL: ${{ inputs.build_all }}
+          SHARED_CHANGED: ${{ steps.filter.outputs.shared }}
+          # A JSON array of the filter names that matched, e.g. ["p01","p07"].
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          set -euo pipefail
+
+          all='[
+            {"id":"p01","dir":"01-chatclient-foundation","image":"chatclient-foundation","port":"8081"},
+            {"id":"p02","dir":"02-tool-calling-guardrails","image":"tool-calling-guardrails","port":"8082"},
+            {"id":"p03","dir":"03-rag-grounded-answers","image":"rag-grounded-answers","port":"8083"},
+            {"id":"p04","dir":"04-mcp-server-tools","image":"mcp-server-tools","port":"8084"},
+            {"id":"p05","dir":"05-mcp-client-agent","image":"mcp-client-agent","port":"8085"},
+            {"id":"p06","dir":"06-workflow-orchestration","image":"workflow-orchestration","port":"8086"},
+            {"id":"p07","dir":"07-state-machine-orchestration","image":"state-machine-orchestration","port":"8087"},
+            {"id":"p08","dir":"08-autonomous-agent-loop","image":"autonomous-agent-loop","port":"8088"},
+            {"id":"p09","dir":"09-multi-agent-supervisor","image":"multi-agent-supervisor","port":"8089"}
+          ]'
+
+          build_all=false
+          reason=""
+          if [ "${EVENT}" = "workflow_dispatch" ] && [ "${DISPATCH_ALL:-true}" = "true" ]; then
+            build_all=true; reason="manual run"
+          elif [[ "${REF}" == refs/tags/* ]]; then
+            build_all=true; reason="tag push"
+          elif [ "${SHARED_CHANGED:-false}" = "true" ]; then
+            build_all=true; reason="a shared file changed"
+          fi
+
+          if [ "${build_all}" = "true" ]; then
+            echo "Building all nine images (${reason})."
+            projects=$(jq -cn --argjson all "${all}" '$all')
+          else
+            changed="${CHANGED:-[]}"
+            projects=$(jq -cn --argjson all "${all}" --argjson changed "${changed}" \
+              '[ $all[] | select(.id as $i | $changed | index($i)) ]')
+            echo "Changed filters: ${changed}"
+          fi
+
+          echo "projects=${projects}" >> "$GITHUB_OUTPUT"
+          echo "Matrix: ${projects}"
+
+  # ---------------------------------------------------------------------------
+  # Build, smoke test, and (outside pull requests) publish
+  # ---------------------------------------------------------------------------
+  build:
+    needs: changes
+    if: needs.changes.outputs.projects != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.changes.outputs.projects) }}
+    name: ${{ matrix.project.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pull requests build and test but publish nothing: no unreviewed change reaches the
+      # registry, and a fork PR has no package-write permission anyway.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.project.image }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build ${{ matrix.project.image }}
+        uses: docker/build-push-action@v6
+        with:
+          # The context is the project directory. Each project declares
+          # spring-boot-starter-parent with an empty <relativePath/>, so it builds standalone.
+          context: ${{ matrix.project.dir }}
+          file: ${{ matrix.project.dir }}/Dockerfile
+          # A fixed local tag is added so the smoke test below works identically on a pull
+          # request (nothing pushed) and on main (pushed as well).
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            local/${{ matrix.project.image }}:ci
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          push: ${{ github.event_name != 'pull_request' }}
+          # Layer cache scoped per image, so one project cannot evict another's cache.
+          cache-from: type=gha,scope=${{ matrix.project.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.project.image }}
+          provenance: false
+
+      - name: Smoke test /actuator/health
+        shell: bash
+        env:
+          IMAGE: local/${{ matrix.project.image }}:ci
+          PORT: ${{ matrix.project.port }}
+        run: |
+          set -euo pipefail
+
+          # A syntactically plausible but fake key. Every project resolves the placeholder at
+          # startup and none of them calls a model while starting, so this is enough to boot.
+          # Project 04 has no api-key property at all and simply ignores it.
+          docker run -d --name smoke -p "${PORT}:${PORT}" \
+            -e ANTHROPIC_API_KEY=sk-ant-not-a-real-key-only-used-to-boot \
+            "${IMAGE}"
+
+          for attempt in $(seq 1 60); do
+            if curl -fsS "http://localhost:${PORT}/actuator/health" 2>/dev/null | grep -q '"status":"UP"'; then
+              echo "${IMAGE} healthy after ${attempt}s"
+              docker rm -f smoke >/dev/null
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' smoke 2>/dev/null)" != "true" ]; then
+              echo "::error::${IMAGE} exited during startup"
+              docker logs smoke
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "::error::${IMAGE} did not report UP within 60s"
+          docker logs smoke
+          docker rm -f smoke >/dev/null
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # A single check to gate merges on, whatever the matrix happened to contain
+  # ---------------------------------------------------------------------------
+  images:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        shell: bash
+        env:
+          RESULT: ${{ needs.build.result }}
+        run: |
+          # 'skipped' means no project changed in this commit, which is a pass.
+          case "${RESULT}" in
+            failure|cancelled) echo "::error::image build ${RESULT}"; exit 1 ;;
+            *) echo "image build: ${RESULT}" ;;
+          esac

@@ -96,7 +96,7 @@ mvn spring-boot:run
 ```
 
 ```bash
-curl -s localhost:8080/api/policy/ask -H 'Content-Type: application/json' \
+curl -s localhost:8083/api/policy/ask -H 'Content-Type: application/json' \
   -d '{"tenant":"acme","question":"The delivered parcel was never received. Can we refund it?"}'
 ```
 
@@ -113,7 +113,7 @@ curl -s localhost:8080/api/policy/ask -H 'Content-Type: application/json' \
 Try a question the policy does not cover, and watch it refuse:
 
 ```bash
-curl -s localhost:8080/api/policy/ask -H 'Content-Type: application/json' \
+curl -s localhost:8083/api/policy/ask -H 'Content-Type: application/json' \
   -d '{"tenant":"acme","question":"What is the warranty period for electrical goods?"}'
 ```
 

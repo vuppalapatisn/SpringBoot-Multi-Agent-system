@@ -85,6 +85,35 @@ cd 0X-<project> && mvn spring-boot:run
 
 `ANTHROPIC_API_KEY` is needed only to run an application, never to build or test.
 
+## Containers
+
+Each project has its own `Dockerfile` and `.dockerignore`, and **the build context is the project
+directory** — never the repository root. Keep it that way: it is only possible because every
+project declares `spring-boot-starter-parent` with an empty `<relativePath/>`.
+
+Conventions to preserve when touching them:
+
+* **Project NN listens on port 808N.** `application.yml`, `EXPOSE`, the `HEALTHCHECK` URL, the
+  compose mapping and the workflow matrix all have to agree. A mismatch is a green build with a
+  container that never reports healthy.
+* Layered extraction uses `java -Djarmode=tools -jar target/*.jar extract --layers --launcher`
+  (verified on Boot 4.0.8: layers are `dependencies`, `spring-boot-loader`,
+  `snapshot-dependencies`, `application`). The old `layertools` jarmode is gone.
+* `ENTRYPOINT` stays `["sh","-c","exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]`
+  — the `exec` is what makes the JVM PID 1 and graceful shutdown work.
+* Dockerfiles stay **ASCII**, and never bake `ANTHROPIC_API_KEY` in.
+* Tests are skipped in the image build on purpose; `build.yml` runs `mvn verify`.
+
+**Environment-variable overrides:** Spring's relaxed binding replaces dots with underscores and
+**removes hyphens**. `agentic.tools.execution-mode` is `AGENTIC_TOOLS_EXECUTIONMODE`, *not*
+`AGENTIC_TOOLS_EXECUTION_MODE` — the latter binds to a property that does not exist and is ignored
+silently. For map keys containing a hyphen (the MCP connection name `refund-desk`) relaxed binding
+cannot express it at all; use `SPRING_APPLICATION_JSON`, as `docker-compose.yml` does.
+
+Adding a project means adding it to: the aggregator `pom.xml`, the root README table,
+`docker-compose.yml`, and the project array in `.github/workflows/docker.yml` (with a matching
+`paths-filter` entry, or it will never build).
+
 ## What not to do
 
 * Do not add a tool that takes raw SQL, a file path, a URL, or a shell command.
